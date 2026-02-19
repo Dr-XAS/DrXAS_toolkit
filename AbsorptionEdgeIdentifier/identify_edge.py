@@ -1,12 +1,25 @@
-import numpy as np
 import os
 import sys
 
+# Add parent directory to path to import EverythingXDI
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+try:
+    from EverythingXDI.parser import XASParser
+except ImportError:
+    # Fallback if running from root
+    sys.path.append(current_dir)
+    try:
+        from EverythingXDI.parser import XASParser
+    except ImportError:
+        print("Warning: Could not import XASParser. Falling back to simple loading.")
+        XASParser = None
+
 class EdgeIdentifier:
     def __init__(self):
-        # Dictionary of K-edge energies (eV) for elements Z=1 to Z=92 (H to U)
-        # Using a subset of common XAS elements for now.
-        # Data from X-ray Data Booklet (LBL)
+        # Dictionary of K-edge energies (eV)
         self.k_edges = {
             'He': 24.6, 'Li': 54.7, 'Be': 111.5, 'B': 188, 'C': 284.2, 'N': 409.9, 'O': 543.1, 'F': 696.7, 'Ne': 870.2,
             'Na': 1070.8, 'Mg': 1303, 'Al': 1559, 'Si': 1839, 'P': 2145.5, 'S': 2472, 'Cl': 2822.4, 'Ar': 3205.9,
@@ -37,17 +50,32 @@ class EdgeIdentifier:
         }
 
     def load_spectrum(self, filepath):
-        """Loads a spectrum from a file.
-        Assumes first column is Energy (eV) and second is Absorption (mu).
-        Skips lines starting with #.
-        """
+        """Loads a spectrum from a file using the improved parser if available."""
+        if XASParser:
+            parser = XASParser()
+            energy, mu = parser.parse_file(filepath)
+            if energy:
+                return energy, mu
+                
+        # Fallback to simple loader
+        energy = []
+        mu = []
         try:
-            data = np.loadtxt(filepath, comments='#')
-            if data.shape[1] < 2:
-                print(f"Error: File {filepath} does not have at least 2 columns.")
+            with open(filepath, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            energy.append(float(parts[0]))
+                            mu.append(float(parts[1]))
+                        except ValueError:
+                            continue
+            if not energy:
+                # print(f"Error: No valid data found in {filepath} (fallback loader).")
                 return None, None
-            energy = data[:, 0]
-            mu = data[:, 1]
             return energy, mu
         except Exception as e:
             print(f"Error loading {filepath}: {e}")
@@ -55,19 +83,43 @@ class EdgeIdentifier:
 
     def find_edge_energy(self, energy, mu):
         """Finds the edge energy by locating the maximum of the first derivative."""
-        # Calculate derivative d(mu)/d(E)
-        dmu = np.gradient(mu, energy)
+        if len(energy) < 2:
+            return None
+            
+        # Calculate derivative d(mu)/d(E) using simple forward difference
+        derivs = []
+        mid_energies = []
         
-        # Find the index of the maximum derivative
-        max_deriv_idx = np.argmax(dmu)
-        edge_energy = energy[max_deriv_idx]
+        for i in range(len(energy) - 1):
+            de = energy[i+1] - energy[i]
+            dmu = mu[i+1] - mu[i]
+            if de != 0:
+                derivs.append(dmu / de)
+                mid_energies.append((energy[i] + energy[i+1]) / 2)
+            else:
+                derivs.append(0)
+                mid_energies.append(energy[i])
         
-        return edge_energy
+        # Find max derivative
+        max_val = -float('inf')
+        max_idx = -1
+        
+        for i, val in enumerate(derivs):
+            if val > max_val:
+                max_val = val
+                max_idx = i
+                
+        if max_idx != -1:
+            return mid_energies[max_idx]
+        return None
 
-    def identify_element(self, edge_energy, tolerance=50.0):
+    def identify_element(self, edge_energy, tolerance=100.0):
         """Identifies the element and edge type based on the edge energy.
         tolerance: Energy window in eV to search for matches.
         """
+        if edge_energy is None:
+            return []
+            
         matches = []
         
         # Check K-edges
@@ -85,35 +137,47 @@ class EdgeIdentifier:
         
         return matches
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python identify_edge.py <path_to_spectrum_file>")
-        sys.exit(1)
-        
-    filepath = sys.argv[1]
-    
-    identifier = EdgeIdentifier()
+def process_file(identifier, filepath):
     energy, mu = identifier.load_spectrum(filepath)
     
     if energy is None:
-        sys.exit(1)
-        
-    print(f"Processing file: {filepath}")
+        print(f"Skipping {os.path.basename(filepath)}: Could not load data.")
+        return
+
+    print(f"Processing file: {os.path.basename(filepath)}")
     
     edge_energy = identifier.find_edge_energy(energy, mu)
-    print(f"Detected edge energy (max derivative): {edge_energy:.2f} eV")
+    if edge_energy:
+        print(f"  Detected edge energy: {edge_energy:.2f} eV")
     
-    matches = identifier.identify_element(edge_energy)
+        matches = identifier.identify_element(edge_energy)
     
-    if not matches:
-        print("No matching element found within tolerance.")
+        if not matches:
+            print("  No matching element found within tolerance.")
+        else:
+            top_match = matches[0]
+            print(f"  Identified: {top_match['Element']} {top_match['Edge']}-edge (Diff: {top_match['Diff']:.2f} eV)")
     else:
-        print("\nPossible matches:")
-        for match in matches:
-            print(f"  {match['Element']} {match['Edge']}-edge (Standard: {match['Energy']:.1f} eV, Diff: {match['Diff']:.2f} eV)")
-            
-        top_match = matches[0]
-        print(f"\nidentified: {top_match['Element']} {top_match['Edge']}-edge")
+        print("  Could not determine edge energy.")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python identify_edge.py <path_to_spectrum_file_or_directory>")
+        sys.exit(1)
+        
+    path = sys.argv[1]
+    identifier = EdgeIdentifier()
+    
+    if os.path.isdir(path):
+        print(f"Scanning directory: {path}")
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if file.startswith('.'): continue
+                # Basic extension check
+                if file.lower().endswith(('.dat', '.xdi', '.txt', '.001', '.002')):
+                    process_file(identifier, os.path.join(root, file))
+    else:
+        process_file(identifier, path)
 
 if __name__ == "__main__":
     main()
