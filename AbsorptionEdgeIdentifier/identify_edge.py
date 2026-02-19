@@ -35,6 +35,34 @@ class EdgeIdentifier:
             'Pa': 112601, 'U': 115606
         }
         
+        # Dictionary of L1-edge energies (eV)
+        self.l1_edges = {
+            'K': 378.6, 'Ca': 438.4, 'Sc': 498, 'Ti': 564, 'V': 626, 'Cr': 696, 'Mn': 769, 'Fe': 844.6,
+            'Co': 925.1, 'Ni': 1008.6, 'Cu': 1096.7, 'Zn': 1196.2, 'Ga': 1299, 'Ge': 1414.6, 'As': 1527,
+            'Se': 1652, 'Br': 1782, 'Kr': 1921, 'Rb': 2065, 'Sr': 2216, 'Y': 2373, 'Zr': 2532, 'Nb': 2698,
+            'Mo': 2866, 'Tc': 3043, 'Ru': 3224, 'Rh': 3412, 'Pd': 3604, 'Ag': 3806, 'Cd': 4018, 'In': 4238,
+            'Sn': 4465, 'Sb': 4698, 'Te': 4939, 'I': 5188, 'Xe': 5453, 'Cs': 5714, 'Ba': 5989, 'La': 6266,
+            'Ce': 6549, 'Pr': 6835, 'Nd': 7126, 'Pm': 7428, 'Sm': 7737, 'Eu': 8052, 'Gd': 8376, 'Tb': 8708,
+            'Dy': 9046, 'Ho': 9394, 'Er': 9751, 'Tm': 10116, 'Yb': 10486, 'Lu': 10870, 'Hf': 11271, 'Ta': 11682,
+            'W': 12100, 'Re': 12527, 'Os': 12968, 'Ir': 13419, 'Pt': 13880, 'Au': 14353, 'Hg': 14839, 'Tl': 15347,
+            'Pb': 15861, 'Bi': 16388, 'Po': 16939, 'At': 17493, 'Rn': 18049, 'Fr': 18639, 'Ra': 19237,
+            'Ac': 19840, 'Th': 20472, 'Pa': 21105, 'U': 21757
+        }
+
+        # Dictionary of L2-edge energies (eV)
+        self.l2_edges = {
+            'K': 297, 'Ca': 350, 'Sc': 403, 'Ti': 461, 'V': 521, 'Cr': 584, 'Mn': 649, 'Fe': 720,
+            'Co': 794, 'Ni': 870, 'Cu': 953, 'Zn': 1044, 'Ga': 1143, 'Ge': 1248, 'As': 1359,
+            'Se': 1474, 'Br': 1596, 'Kr': 1731, 'Rb': 1864, 'Sr': 2007, 'Y': 2156, 'Zr': 2307, 'Nb': 2465,
+            'Mo': 2625, 'Tc': 2793, 'Ru': 2967, 'Rh': 3146, 'Pd': 3330, 'Ag': 3524, 'Cd': 3727, 'In': 3938,
+            'Sn': 4156, 'Sb': 4380, 'Te': 4612, 'I': 4852, 'Xe': 5107, 'Cs': 5359, 'Ba': 5624, 'La': 5891,
+            'Ce': 6164, 'Pr': 6440, 'Nd': 6722, 'Pm': 7013, 'Sm': 7312, 'Eu': 7617, 'Gd': 7930, 'Tb': 8252,
+            'Dy': 8581, 'Ho': 8918, 'Er': 9264, 'Tm': 9617, 'Yb': 9978, 'Lu': 10349, 'Hf': 10739, 'Ta': 11136,
+            'W': 11544, 'Re': 11959, 'Os': 12385, 'Ir': 12824, 'Pt': 13273, 'Au': 13734, 'Hg': 14209, 'Tl': 14698,
+            'Pb': 15200, 'Bi': 15711, 'Po': 16244, 'At': 16785, 'Rn': 17337, 'Fr': 17907, 'Ra': 18484,
+            'Ac': 19083, 'Th': 19693, 'Pa': 20314, 'U': 20948
+        }
+
         # Dictionary of L3-edge energies (eV)
         self.l3_edges = {
              'Sc': 402, 'Ti': 456, 'V': 513, 'Cr': 575, 'Mn': 640, 'Fe': 708,
@@ -74,12 +102,50 @@ class EdgeIdentifier:
                         except ValueError:
                             continue
             if not energy:
-                # print(f"Error: No valid data found in {filepath} (fallback loader).")
                 return None, None
             return energy, mu
         except Exception as e:
             print(f"Error loading {filepath}: {e}")
             return None, None
+
+    def extract_metadata_hints(self, filepath):
+        """Extract element/edge hints from file metadata headers.
+        Returns (element_hint, edge_hint) or (None, None).
+        """
+        element_hint = None
+        edge_hint = None
+        try:
+            with open(filepath, 'r', errors='ignore') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith('#'):
+                        # Stop at first data line
+                        if line and not line.startswith('#'):
+                            break
+                        continue
+                    low = line.lower()
+                    # XDI standard: # Element.symbol: Fe
+                    if 'element.symbol' in low or 'element symbol' in low:
+                        val = line.split(':', 1)[-1].strip()
+                        if val:
+                            element_hint = val.strip()
+                    # XDI standard: # Element.edge: K
+                    if 'element.edge' in low or 'element edge' in low:
+                        val = line.split(':', 1)[-1].strip()
+                        if val:
+                            edge_hint = val.strip().upper()
+                    # Sample formula: # Sample.formula: Fe2O3
+                    if 'sample.formula' in low and not element_hint:
+                        val = line.split(':', 1)[-1].strip()
+                        if val:
+                            # Try to extract element symbol from formula
+                            import re
+                            symbols = re.findall(r'[A-Z][a-z]?', val)
+                            if symbols:
+                                element_hint = symbols[0]
+        except:
+            pass
+        return element_hint, edge_hint
 
     def find_edge_energy(self, energy, mu):
         """Finds the edge energy by locating the maximum of the first derivative."""
@@ -113,27 +179,59 @@ class EdgeIdentifier:
             return mid_energies[max_idx]
         return None
 
-    def identify_element(self, edge_energy, tolerance=100.0):
+    def identify_element(self, edge_energy, tolerance=100.0, element_hint=None, edge_hint=None):
         """Identifies the element and edge type based on the edge energy.
         tolerance: Energy window in eV to search for matches.
+        element_hint: Optional element symbol from file metadata.
+        edge_hint: Optional edge type from file metadata (K, L1, L2, L3).
         """
         if edge_energy is None:
             return []
             
         matches = []
         
-        # Check K-edges
-        for element, energy in self.k_edges.items():
-            if abs(energy - edge_energy) <= tolerance:
-                matches.append({'Element': element, 'Edge': 'K', 'Energy': energy, 'Diff': abs(energy - edge_energy)})
+        # Edge preference order (K is most common, then L3, L2, L1)
+        edge_priority = {'K': 0, 'L3': 1, 'L2': 2, 'L1': 3}
         
-        # Check L3-edges
-        for element, energy in self.l3_edges.items():
-            if abs(energy - edge_energy) <= tolerance:
-                matches.append({'Element': element, 'Edge': 'L3', 'Energy': energy, 'Diff': abs(energy - edge_energy)})
+        # Check all edge types
+        edge_tables = {
+            'K': self.k_edges,
+            'L1': self.l1_edges,
+            'L2': self.l2_edges,
+            'L3': self.l3_edges,
+        }
         
-        # Sort by difference
-        matches.sort(key=lambda x: x['Diff'])
+        for edge_name, edge_dict in edge_tables.items():
+            for element, energy in edge_dict.items():
+                if abs(energy - edge_energy) <= tolerance:
+                    matches.append({
+                        'Element': element,
+                        'Edge': edge_name,
+                        'Energy': energy,
+                        'Diff': abs(energy - edge_energy),
+                    })
+        
+        # Sort by: (1) difference, (2) edge priority as tiebreaker
+        matches.sort(key=lambda x: (x['Diff'], edge_priority.get(x['Edge'], 9)))
+        
+        # If we have metadata hints, boost matching entries to the top
+        if element_hint or edge_hint:
+            def hint_score(m):
+                score = 0
+                if element_hint and m['Element'].lower() == element_hint.lower():
+                    score -= 2  # strong boost for element match
+                if edge_hint and m['Edge'].upper() == edge_hint.upper():
+                    score -= 1  # moderate boost for edge match
+                return score
+            
+            # Only re-sort among matches with similar differences (within 20 eV of best)
+            if matches:
+                best_diff = matches[0]['Diff']
+                # Separate into "close" and "far" groups
+                close = [m for m in matches if m['Diff'] <= best_diff + 20]
+                far = [m for m in matches if m['Diff'] > best_diff + 20]
+                close.sort(key=lambda x: (hint_score(x), x['Diff'], edge_priority.get(x['Edge'], 9)))
+                matches = close + far
         
         return matches
 
@@ -144,13 +242,16 @@ def process_file(identifier, filepath):
         print(f"Skipping {os.path.basename(filepath)}: Could not load data.")
         return
 
+    # Extract metadata hints for disambiguation
+    element_hint, edge_hint = identifier.extract_metadata_hints(filepath)
+
     print(f"Processing file: {os.path.basename(filepath)}")
     
     edge_energy = identifier.find_edge_energy(energy, mu)
     if edge_energy:
         print(f"  Detected edge energy: {edge_energy:.2f} eV")
     
-        matches = identifier.identify_element(edge_energy)
+        matches = identifier.identify_element(edge_energy, element_hint=element_hint, edge_hint=edge_hint)
     
         if not matches:
             print("  No matching element found within tolerance.")
