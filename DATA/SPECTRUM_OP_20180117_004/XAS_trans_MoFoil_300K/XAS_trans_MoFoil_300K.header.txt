@@ -1,0 +1,30 @@
+*Spectrum*
+- Title: Mo K edge XAS transmission of Mo metallic reference foil at ambient conditions
+- Version: #1 (2018-01-31 23:51:01 UTC)
+- Measurement type: laboratory measurement (spectrum)
+- Spectrum type: transmission (AU)
+- Spectral unit: Energy (eV)
+- Valid spectral range(s): 19796.000448-20903.000473 eV (Resol. 1.03 eV)
+- Observation geometry: 
+- Spatial observation mode: single spot
+- Data analysis: raw averaged spectra
+- Quality flag: 3
+- File name: XAS_trans_MoFoil_300K.data.txt
+- Comments: 
+
+*Sample*
+- Name: Mo metallic foil
+- Origin(s): commercial
+- Type: compact
+- Temperature: 293.0 +/- 2.0 K
+- Pressure: 
+
+*Experiment*
+- Title: Mo K edge XAS transmission of Mo metallic foil reference at ambient conditions
+- Version: #1 (2018-01-31 23:51:01 UTC)
+- Experimentalist(s): Proux Olivier
+- Database(s): FAME @ SSHADE
+- DOI: https://doi.org/10.26302/SSHADE/EXPERIMENT_DT_20180117_004
+
+*Data reference*
+- Proux, Olivier (2011): Mo K edge XAS transmission of Mo metallic foil reference at ambient conditions. SSHADE/FAME (OSUG Data Center). Dataset/Spectral Data. https://doi.org/10.26302/SSHADE/EXPERIMENT_DT_20180117_004

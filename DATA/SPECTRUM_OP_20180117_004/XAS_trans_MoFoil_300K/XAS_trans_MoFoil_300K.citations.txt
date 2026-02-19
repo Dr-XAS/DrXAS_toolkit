@@ -1,0 +1,41 @@
+* SSHADE DATA USE POLICY, LINKS and REFERENCES *
+
+* SSHADE Data use policy
+Data access and use are ruled by the SSHADE consortium data policy.
+
+Any use of downloaded SSHADE data in a scientific or technical paper or a presentation is free but **you should cite both SSHADE and the used data** in the text (exactly as for normal papers: 'first author et al. (year)'). The full data reference, including its unique DOI identifier, should appear either in the main reference section of the paper or in a special 'data citation' section. When available, the original paper(s) presenting the data should be also cited. All these reference(s) are provided below.
+
+The data citation is made at the level of the experiment containing one or more spectra, even if only one spectrum of the experiment is used in your paper (you can then specify which one(s) in the text).
+
+-------------------------------
+* Data DOI
+doi:10.26302/SSHADE/EXPERIMENT_DT_20180117_004
+
+The DOI of the data directly links to the experiment page in the SSHADE database infrastructure containing the spectral data. So keep it in the reference.
+
+* Data reference:
+- Proux, Olivier (2011): Mo K edge XAS transmission of Mo metallic foil reference at ambient conditions. SSHADE/FAME (OSUG Data Center). Dataset/Spectral Data. https://doi.org/10.26302/SSHADE/EXPERIMENT_DT_20180117_004
+
+--------------------------------
+* Database(s) providing the data:
+SSHADE / FAME: "French Absorption spectroscopy beamline in Material and Environmental science" database service
+
+* Database DOI:
+doi:10.26302/SSHADE/FAME
+
+If you extensively use data of this database, you may also cite the database itself:
+
+* Database reference:
+- Kieffer, Isabelle; Testemale, Denis (2016). SSHADE/FAME: "French Absorption spectroscopy beamline in Material and Environmental science" database service. SSHADE (OSUG Data Center). Service/Database. https://doi.org/10.26302/SSHADE/FAME
+
+--------------------------------
+* SSHADE database infrastructure:
+SSHADE: "Solid Spectroscopy Hosting Architecture of Databases and Expertise"
+
+* SSHADE DOI
+doi:10.26302/SSHADE
+
+If you extensively use data of the SSHADE database infrastructure, you may also cite SSHADE in your reference list:
+
+* SSHADE reference:
+- Schmitt, Bernard; Bollard, Philippe; Albert, Damien; Garenne, Alexandre; Bonal, Lydie; and the SSHADE partner's consortium (2018). SSHADE: "Solid Spectroscopy Hosting Architecture of Databases and Expertise". OSUG Data Center. Service/Database infrastructure. https://doi.org/10.26302/SSHADE

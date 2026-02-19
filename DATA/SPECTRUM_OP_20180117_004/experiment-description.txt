@@ -1,0 +1,19 @@
+*EXPERIMENT files description*
+
+The experiment export zip contains 3 files (in addition to this one) and a series of directories containing each individual spectrum of the experiment and their attached information (see the description-spectrum.txt file inside):
+
+The filename of the zip and of all these files begins with the same root that is the 'Unique IDentifier' (EXPERIMENT_UID) of the experiment (ex: 'EXPERIMENT_HM_20160512_001').
+This will allow you to always know which file belongs to a given experiment.
+
+* The experiment thumbnail file: 'EXPERIMENT_UID'.micron.thumbnail.png, or 'EXPERIMENT_UID'.cm-1.thumbnail.png, ...
+- provides a preview of the experiment spectra in their original unit
+
+* The experiment metadata file: 'EXPERIMENT_UID'.experiment.html
+- contains all the metadata of the experiment. The file contains active links to all associated metadata (spectra, instrument, experimentalists, publication, ...) as on the SSHADE web site.
+
+* The spectrum description file: 'spectrum-description.txt' (common to all spectra)
+- provide a description of each file contained in a spectrum directory.
+
+* The spectra directories : 'SPECTRUM_UID'
+- their contain all data and metadata relative to a spectrum
+- their names are the 'Unique IDentifier' (SPECTRUM_UID) of the spectrum (ex: 'SPECTRUM_HM_20160512_001', 'SPECTRUM_HM_20160512_002', ...).

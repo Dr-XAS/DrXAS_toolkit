@@ -1,0 +1,40 @@
+*SPECTRUM files description: simple spectrum*
+
+Each spectrum export directory contains 5 files (in addition to this one):
+
+The name of the directory and of all the files begins with the same root ('spectrum-root') that abbreviate the types of spectrum and sample and the value of the varying parameter, if any.
+This will allow you to always know which file belongs to a given spectrum (so you can put them all in the same directory without mixing them).
+
+* The spectrum thumbnail file: 'spectrum-root'.micron.thumbnail.png, or 'spectrum-root'.cm-1.thumbnail.png, ...
+  - provides a preview of the spectrum in its original units
+
+* The spectrum data file: 'spectrum-root'.data.csv (or .asc, ...)
+  - contains the spectral data (spectral position, intensity) and possibly the intensity error(s)) and a quality flag.
+
+	The file header has 3 lines in the standard choice "Data type" = 'spectrum with column name and units'
+	  - line 1: number of spectral points
+	  - line 2: type of spectrum and its unit (no intensity unit means intensity has no unit)
+	The file may have up to 5 columns (separated with ',' or 'tab') described in the line above the data:
+	  - line 3: the name of the columns: 'position(unit)', 'intensity' (or 'intensity_mean', or 'intensity_median'), 'error' (or 'stdev' or {'err_minus', 'err_plus'}, or {'int_min', 'int_max'}), 'quality'
+		- column 1: 'position' will be one of {wavenumber, wavelength, frequency, energy} and 'unit' one of {m-1, cm-1, angstrom, nm, micron, mm, m, km, Hz, kHz, MHz, GHz, eV, keV}
+		- column 2: 'intensity': the intensity of the spectrum of the type and in the unit described in line 2
+		  - or 'intensity_mean': the intensity given is the mean value of several measurements
+		  - or 'intensity_median': the intensity given is the median value of several measurements
+		- column 3: 'error': error (symmetric, +/-) on the intensity
+		  - or 'stdev': standard deviation on the intensity (from multiple measurements)
+		  - or columns 3 & 4: 'err_minus', 'err_plus': negative and positive errors on the intensity
+		  - or columns 3 & 4: 'int_min', 'int_max': minimum and maximum intensities
+		- columns 4 or 5: 'quality': flag of quality, generally between 0 and 5 (0: 'no data' to 5: excellent data)
+	  - lines 4 and following: the numerical data of the spectrum
+
+* The spectrum metadata file : 'spectrum-root'.spectrum.html
+* The sample metadata file : 'spectrum-root'.sample.html
+  - They contain all the metadata of the spectrum and its sample (with its complete structure).
+  - They contain active links to all associated metadata (instrument, experimentalists, publication, ...) as in the SSHADE web site.
+
+* The citation file: 'spectrum-root'.citations.txt
+  - Gives:
+	- the general rules for SSHADE data use,
+	- the DOI of the data
+	- the full data reference (to be cited in papers),
+	- the reference of the original paper(s) associated with this data (to be cited in papers).
