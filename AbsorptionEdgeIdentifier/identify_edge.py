@@ -17,6 +17,7 @@ except ImportError:
         print("Warning: Could not import XASParser. Falling back to simple loading.")
         XASParser = None
 
+
 class EdgeIdentifier:
     def __init__(self):
         # Dictionary of K-edge energies (eV)
@@ -34,7 +35,7 @@ class EdgeIdentifier:
             'Bi': 90526, 'Po': 93105, 'At': 95730, 'Rn': 98404, 'Fr': 101137, 'Ra': 103922, 'Ac': 106755, 'Th': 109651,
             'Pa': 112601, 'U': 115606
         }
-        
+
         # Dictionary of L1-edge energies (eV)
         self.l1_edges = {
             'K': 378.6, 'Ca': 438.4, 'Sc': 498, 'Ti': 564, 'V': 626, 'Cr': 696, 'Mn': 769, 'Fe': 844.6,
@@ -84,7 +85,7 @@ class EdgeIdentifier:
             energy, mu = parser.parse_file(filepath)
             if energy:
                 return energy, mu
-                
+
         # Fallback to simple loader
         energy = []
         mu = []
@@ -111,7 +112,7 @@ class EdgeIdentifier:
     def load_spectrum_from_db(self, db_path, spectrum_id=None, element=None, edge=None, limit=None):
         """
         Load spectra directly from the xas_spectra.db SQLite database.
-        
+
         Parameters
         ----------
         db_path : str
@@ -124,7 +125,7 @@ class EdgeIdentifier:
             Filter by edge type (e.g., 'K-edge', 'L3-edge').
         limit : int, optional
             Maximum number of spectra to return.
-            
+
         Returns
         -------
         list of dict
@@ -132,16 +133,16 @@ class EdgeIdentifier:
         """
         import sqlite3
         import json
-        
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        
-        query = """SELECT id, element, material_name, edge, energy_json, mu_json 
-                   FROM spectra 
+
+        query = """SELECT id, element, material_name, edge, energy_json, mu_json
+                   FROM spectra
                    WHERE download_status='success' AND energy_json IS NOT NULL"""
         params = []
-        
+
         if spectrum_id is not None:
             query += " AND id = ?"
             params.append(spectrum_id)
@@ -154,15 +155,15 @@ class EdgeIdentifier:
         if limit:
             query += " LIMIT ?"
             params.append(limit)
-        
+
         rows = c.execute(query, tuple(params)).fetchall()
         results = []
-        
+
         for row in rows:
             try:
                 energy_list = json.loads(row['energy_json'])
                 mu_list = json.loads(row['mu_json'])
-                
+
                 if energy_list and mu_list and len(energy_list) > 5:
                     results.append({
                         'id': row['id'],
@@ -173,53 +174,20 @@ class EdgeIdentifier:
                         'mu': mu_list,
                     })
             except Exception:
-                pass  # Skip unparseable entries
-        
+                pass
+
         conn.close()
         return results
-
-    def extract_metadata_hints(self, filepath):
-        """Extract element/edge hints from file metadata headers.
-        Returns (element_hint, edge_hint) or (None, None).
-        """
-        element_hint = None
-        edge_hint = None
-        try:
-            with open(filepath, 'r', errors='ignore') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line.startswith('#'):
-                        if line and not line.startswith('#'):
-                            break
-                        continue
-                    low = line.lower()
-                    if 'element.symbol' in low or 'element symbol' in low:
-                        val = line.split(':', 1)[-1].strip()
-                        if val:
-                            element_hint = val.strip()
-                    if 'element.edge' in low or 'element edge' in low:
-                        val = line.split(':', 1)[-1].strip()
-                        if val:
-                            edge_hint = val.strip().upper()
-                    if 'sample.formula' in low and not element_hint:
-                        val = line.split(':', 1)[-1].strip()
-                        if val:
-                            import re
-                            symbols = re.findall(r'[A-Z][a-z]?', val)
-                            if symbols:
-                                element_hint = symbols[0]
-        except:
-            pass
-        return element_hint, edge_hint
 
     def find_edge_energy(self, energy, mu):
         """Finds the edge energy by locating the maximum of the first derivative."""
         if len(energy) < 2:
             return None
-            
+
+        # Calculate derivative d(mu)/d(E) using simple forward difference
         derivs = []
         mid_energies = []
-        
+
         for i in range(len(energy) - 1):
             de = energy[i+1] - energy[i]
             dmu = mu[i+1] - mu[i]
@@ -229,38 +197,53 @@ class EdgeIdentifier:
             else:
                 derivs.append(0)
                 mid_energies.append(energy[i])
-        
+
+        # Find max derivative
         max_val = -float('inf')
         max_idx = -1
-        
+
         for i, val in enumerate(derivs):
             if val > max_val:
                 max_val = val
                 max_idx = i
-                
+
         if max_idx != -1:
             return mid_energies[max_idx]
         return None
 
-    def identify_element(self, edge_energy, tolerance=100.0, element_hint=None, edge_hint=None):
-        """Identifies the element and edge type based on the edge energy.
-        tolerance: Energy window in eV to search for matches.
-        element_hint: Optional element symbol from file metadata.
-        edge_hint: Optional edge type from file metadata (K, L1, L2, L3).
+    def identify_element(self, edge_energy, tolerance=100.0):
+        """Identifies the element and edge type based on the detected edge energy.
+
+        Uses purely the derivative-determined edge energy compared against
+        reference edge energies from the X-ray Data Booklet.
+
+        Parameters
+        ----------
+        edge_energy : float
+            The edge energy detected from the spectrum (max of 1st derivative).
+        tolerance : float
+            Energy window in eV to search for matches.
+
+        Returns
+        -------
+        list of dict
+            Sorted list of candidate matches, closest first.
         """
         if edge_energy is None:
             return []
-            
+
         matches = []
+
+        # Edge preference order for tiebreaking (K is most common)
         edge_priority = {'K': 0, 'L3': 1, 'L2': 2, 'L1': 3}
-        
+
         edge_tables = {
             'K': self.k_edges,
             'L1': self.l1_edges,
             'L2': self.l2_edges,
             'L3': self.l3_edges,
         }
-        
+
         for edge_name, edge_dict in edge_tables.items():
             for element, energy in edge_dict.items():
                 if abs(energy - edge_energy) <= tolerance:
@@ -270,25 +253,10 @@ class EdgeIdentifier:
                         'Energy': energy,
                         'Diff': abs(energy - edge_energy),
                     })
-        
+
+        # Sort by: (1) energy difference, (2) edge priority as tiebreaker
         matches.sort(key=lambda x: (x['Diff'], edge_priority.get(x['Edge'], 9)))
-        
-        if element_hint or edge_hint:
-            def hint_score(m):
-                score = 0
-                if element_hint and m['Element'].lower() == element_hint.lower():
-                    score -= 2
-                if edge_hint and m['Edge'].upper() == edge_hint.upper():
-                    score -= 1
-                return score
-            
-            if matches:
-                best_diff = matches[0]['Diff']
-                close = [m for m in matches if m['Diff'] <= best_diff + 20]
-                far = [m for m in matches if m['Diff'] > best_diff + 20]
-                close.sort(key=lambda x: (hint_score(x), x['Diff'], edge_priority.get(x['Edge'], 9)))
-                matches = close + far
-        
+
         return matches
 
 
@@ -297,21 +265,19 @@ class EdgeIdentifier:
 def process_file(identifier, filepath):
     """Process a single spectrum file."""
     energy, mu = identifier.load_spectrum(filepath)
-    
+
     if energy is None:
         print(f"Skipping {os.path.basename(filepath)}: Could not load data.")
         return
 
-    element_hint, edge_hint = identifier.extract_metadata_hints(filepath)
-
     print(f"Processing file: {os.path.basename(filepath)}")
-    
+
     edge_energy = identifier.find_edge_energy(energy, mu)
     if edge_energy:
         print(f"  Detected edge energy: {edge_energy:.2f} eV")
-    
-        matches = identifier.identify_element(edge_energy, element_hint=element_hint, edge_hint=edge_hint)
-    
+
+        matches = identifier.identify_element(edge_energy)
+
         if not matches:
             print("  No matching element found within tolerance.")
         else:
@@ -324,31 +290,24 @@ def process_file(identifier, filepath):
 def process_db(identifier, db_path, element=None, edge=None, limit=None):
     """Process spectra from the xas_spectra.db database."""
     spectra = identifier.load_spectrum_from_db(db_path, element=element, edge=edge, limit=limit)
-    
+
     if not spectra:
         print("No spectra found matching criteria.")
         return
-    
+
     print(f"Loaded {len(spectra)} spectra from database")
     print("=" * 80)
-    
+
     for spec in spectra:
         energy = spec['energy']
         mu = spec['mu']
-        
-        # Use DB metadata as hints
-        db_edge = spec.get('edge', '') or ''
-        element_hint = spec.get('element', None)
-        edge_hint = None
-        if db_edge:
-            edge_hint = db_edge.replace('-edge', '').upper()
-        
+
         edge_energy = identifier.find_edge_energy(energy, mu)
-        
+
         label = f"[ID {spec['id']}] {spec['element']} - {spec['name']}"
-        
+
         if edge_energy:
-            matches = identifier.identify_element(edge_energy, element_hint=element_hint, edge_hint=edge_hint)
+            matches = identifier.identify_element(edge_energy)
             if matches:
                 top = matches[0]
                 print(f"  {label}")
@@ -367,17 +326,17 @@ def main():
         print("  python identify_edge.py <path_to_spectrum_file_or_directory>")
         print("  python identify_edge.py --db <path_to_db> [--element Fe] [--edge K-edge] [--limit 10]")
         sys.exit(1)
-    
+
     identifier = EdgeIdentifier()
-    
+
     if sys.argv[1] == '--db':
         # Database mode
         db_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(parent_dir, 'xas_spectra.db')
-        
+
         element = None
         edge = None
         limit = 10
-        
+
         i = 3
         while i < len(sys.argv):
             if sys.argv[i] == '--element' and i + 1 < len(sys.argv):
@@ -391,12 +350,12 @@ def main():
                 i += 2
             else:
                 i += 1
-        
+
         process_db(identifier, db_path, element=element, edge=edge, limit=limit)
     else:
         # File/directory mode
         path = sys.argv[1]
-        
+
         if os.path.isdir(path):
             print(f"Scanning directory: {path}")
             for root, dirs, files in os.walk(path):
