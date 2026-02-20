@@ -12,6 +12,7 @@ import os
 import sys
 import sqlite3
 import json
+import random
 
 # Add parent directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,8 @@ sys.path.insert(0, parent_dir)
 from AbsorptionEdgeIdentifier.identify_edge import EdgeIdentifier
 
 DB_PATH = os.path.join(parent_dir, "xas_spectra.db")
+
+N_SAMPLES = 50  # Number of random spectra to test
 
 
 def normalize_edge(edge_str):
@@ -42,56 +45,45 @@ def normalize_edge(edge_str):
     return e.upper()
 
 
-def get_test_spectra(db_path, per_element_edge=1):
+def get_test_spectra(db_path, n_samples=N_SAMPLES):
     """
-    Pull a representative set of spectra from the database for testing.
-    
-    Selects `per_element_edge` spectra for each unique (element, edge) combination
-    that has a clean edge label (K-edge, L1-edge, L2-edge, L3-edge).
+    Randomly sample `n_samples` spectra from the database for testing.
+    Only selects spectra with clean edge labels (K-edge, L1-edge, L2-edge, L3-edge).
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
-    # Get all unique (element, edge) pairs with clean labels
+
+    # Fetch all candidate IDs
     c.execute("""
-        SELECT DISTINCT element, edge 
-        FROM spectra 
-        WHERE download_status='success' 
-          AND energy_json IS NOT NULL 
+        SELECT id, element, material_name, edge, energy_json, mu_json
+        FROM spectra
+        WHERE download_status='success'
+          AND energy_json IS NOT NULL
           AND edge IN ('K-edge', 'L1-edge', 'L2-edge', 'L3-edge')
-        ORDER BY element, edge
+        ORDER BY RANDOM()
     """)
-    pairs = [(r['element'], r['edge']) for r in c.fetchall()]
-    
+    rows = c.fetchall()
+
     test_spectra = []
-    
-    for element, edge in pairs:
-        c.execute("""
-            SELECT id, element, material_name, edge, energy_json, mu_json
-            FROM spectra
-            WHERE download_status='success'
-              AND energy_json IS NOT NULL
-              AND element = ? AND edge = ?
-            LIMIT ?
-        """, (element, edge, per_element_edge))
-        
-        for row in c.fetchall():
-            try:
-                energy = json.loads(row['energy_json'])
-                mu = json.loads(row['mu_json'])
-                if energy and mu and len(energy) > 10:
-                    test_spectra.append({
-                        'id': row['id'],
-                        'element': row['element'],
-                        'edge': edge,
-                        'name': row['material_name'],
-                        'energy': energy,
-                        'mu': mu,
-                    })
-            except:
-                pass
-    
+    for row in rows:
+        if len(test_spectra) >= n_samples:
+            break
+        try:
+            energy = json.loads(row['energy_json'])
+            mu = json.loads(row['mu_json'])
+            if energy and mu and len(energy) > 10:
+                test_spectra.append({
+                    'id': row['id'],
+                    'element': row['element'],
+                    'edge': row['edge'],
+                    'name': row['material_name'],
+                    'energy': energy,
+                    'mu': mu,
+                })
+        except:
+            pass
+
     conn.close()
     return test_spectra
 
@@ -102,7 +94,7 @@ def run_tests():
         sys.exit(1)
     
     identifier = EdgeIdentifier()
-    test_spectra = get_test_spectra(DB_PATH, per_element_edge=1)
+    test_spectra = get_test_spectra(DB_PATH, n_samples=N_SAMPLES)
     
     passed = 0
     failed = 0
