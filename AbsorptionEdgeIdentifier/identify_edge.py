@@ -217,26 +217,44 @@ def process_file(identifier, filepath):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python identify_edge.py <spectrum_file_or_directory>")
-        print()
-        print("Input: two-column text file (Energy in eV, Mu)")
-        print("  Lines starting with '#' are ignored.")
-        sys.exit(1)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    test_data_dir = os.path.join(current_dir, "test_data")
 
     identifier = EdgeIdentifier()
-    path = sys.argv[1]
 
-    if os.path.isdir(path):
-        print(f"Scanning directory: {path}")
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if file.startswith('.'):
-                    continue
-                if file.lower().endswith(('.dat', '.xdi', '.txt', '.data', '.csv')):
-                    process_file(identifier, os.path.join(root, file))
+    if len(sys.argv) >= 2:
+        # Process user-specified file or directory
+        path = sys.argv[1]
+        if os.path.isdir(path):
+            print(f"Scanning directory: {path}")
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    if file.startswith('.'):
+                        continue
+                    if file.lower().endswith(('.dat', '.xdi', '.txt', '.data', '.csv')):
+                        process_file(identifier, os.path.join(root, file))
+        else:
+            process_file(identifier, path)
     else:
-        process_file(identifier, path)
+        # Default: run on example files in test_data/
+        examples = [
+            os.path.join(test_data_dir, "Fe_K_edge.txt"),
+            os.path.join(test_data_dir, "Cu_K_edge.txt"),
+        ]
+
+        print("=" * 60)
+        print("AbsorptionEdgeIdentifier — Example Run")
+        print("=" * 60)
+        print()
+
+        for filepath in examples:
+            if os.path.exists(filepath):
+                process_file(identifier, filepath)
+                print()
+            else:
+                print(f"  Example file not found: {filepath}")
+                print(f"  Run 'python create_examples.py' first.")
+                print()
 
 
 if __name__ == "__main__":
