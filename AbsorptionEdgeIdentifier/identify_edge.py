@@ -186,76 +186,34 @@ class EdgeIdentifier:
 
         return matches
 
+# ─── Example usage ───────────────────────────────────────────────────
 
-# ─── CLI ─────────────────────────────────────────────────────────────
-
-def process_file(identifier, filepath):
-    """Process a single two-column spectrum file."""
-    energy, mu = identifier.load_spectrum(filepath)
-
-    if energy is None:
-        print(f"Skipping {os.path.basename(filepath)}: Could not load data.")
-        return
-
-    print(f"Processing file: {os.path.basename(filepath)}")
-
-    edge_energy = identifier.find_edge_energy(energy, mu)
-    if edge_energy:
-        print(f"  Detected edge energy: {edge_energy:.2f} eV")
-
-        matches = identifier.identify_element(edge_energy)
-
-        if not matches:
-            print("  No matching element found within tolerance.")
-        else:
-            top = matches[0]
-            print(f"  Identified: {top['Element']} {top['Edge']}-edge (Diff: {top['Diff']:.2f} eV)")
-            if len(matches) > 1:
-                print(f"  Runner-up:  {matches[1]['Element']} {matches[1]['Edge']}-edge (Diff: {matches[1]['Diff']:.2f} eV)")
-    else:
-        print("  Could not determine edge energy.")
-
-
-def main():
+if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     test_data_dir = os.path.join(current_dir, "test_data")
 
     identifier = EdgeIdentifier()
 
+    # Get file path from argument, or use example files
     if len(sys.argv) >= 2:
-        # Process user-specified file or directory
-        path = sys.argv[1]
-        if os.path.isdir(path):
-            print(f"Scanning directory: {path}")
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    if file.startswith('.'):
-                        continue
-                    if file.lower().endswith(('.dat', '.xdi', '.txt', '.data', '.csv')):
-                        process_file(identifier, os.path.join(root, file))
-        else:
-            process_file(identifier, path)
+        files = [sys.argv[1]]
     else:
-        # Default: run on example files in test_data/
-        examples = [
-            os.path.join(test_data_dir, "Fe_K_edge.txt"),
-            os.path.join(test_data_dir, "Cu_K_edge.txt"),
-        ]
+        files = [os.path.join(test_data_dir, f)
+                 for f in sorted(os.listdir(test_data_dir)) if f.endswith('.txt')]
 
-        print("=" * 60)
-        print("AbsorptionEdgeIdentifier — Example Run")
-        print("=" * 60)
+    for filepath in files:
+        # Step 1: Load two-column (Energy, Mu) data
+        energy, mu = identifier.load_spectrum(filepath)
+
+        # Step 2: Find edge energy from max of first derivative
+        edge_energy = identifier.find_edge_energy(energy, mu)
+
+        # Step 3: Identify element and edge type
+        matches = identifier.identify_element(edge_energy)
+
+        # Print results
+        print(f"{os.path.basename(filepath)}")
+        print(f"  Edge energy: {edge_energy:.2f} eV")
+        print(f"  Best match:  {matches[0]['Element']} {matches[0]['Edge']}-edge "
+              f"(Diff: {matches[0]['Diff']:.2f} eV)")
         print()
-
-        for filepath in examples:
-            if os.path.exists(filepath):
-                process_file(identifier, filepath)
-                print()
-            else:
-                print(f"  Example file not found: {filepath}")
-                print(f"  Run 'python create_examples.py' first.")
-                print()
-
-
-if __name__ == "__main__":
-    main()
