@@ -1,21 +1,27 @@
+"""
+AbsorptionEdgeIdentifier — Identify element and absorption edge from XAS spectra.
+
+Identifies the element and edge type (K, L1, L2, L3) by:
+  1. Loading a two-column (Energy, Mu) spectrum file
+  2. Computing the first derivative d(mu)/d(E)
+  3. Finding the energy at the maximum derivative (edge energy)
+  4. Comparing against reference edge energies from the X-ray Data Booklet
+
+Usage:
+    python identify_edge.py <spectrum_file>
+    python identify_edge.py <directory>
+
+Example two-column input file:
+    # Energy(eV)  Mu
+    7080.0  0.123
+    7090.0  0.135
+    7100.0  0.189
+    ...
+"""
+
 import os
 import sys
 import math
-
-# Add parent directory to path to import EverythingXDI
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-
-try:
-    from EverythingXDI.parser import XASParser
-except ImportError:
-    sys.path.append(current_dir)
-    try:
-        from EverythingXDI.parser import XASParser
-    except ImportError:
-        print("Warning: Could not import XASParser. Falling back to simple loading.")
-        XASParser = None
 
 
 class EdgeIdentifier:
@@ -79,14 +85,12 @@ class EdgeIdentifier:
         }
 
     def load_spectrum(self, filepath):
-        """Loads a spectrum from a file using the improved parser if available."""
-        if XASParser:
-            parser = XASParser()
-            energy, mu = parser.parse_file(filepath)
-            if energy:
-                return energy, mu
+        """
+        Load a two-column (Energy, Mu) spectrum from a text file.
 
-        # Fallback to simple loader
+        Skips comment lines starting with '#' and blank lines.
+        Expects whitespace- or tab-separated values.
+        """
         energy = []
         mu = []
         try:
@@ -109,82 +113,11 @@ class EdgeIdentifier:
             print(f"Error loading {filepath}: {e}")
             return None, None
 
-    def load_spectrum_from_db(self, db_path, spectrum_id=None, element=None, edge=None, limit=None):
-        """
-        Load spectra directly from the xas_spectra.db SQLite database.
-
-        Parameters
-        ----------
-        db_path : str
-            Path to the xas_spectra.db file.
-        spectrum_id : int, optional
-            Specific spectrum ID to load.
-        element : str, optional
-            Filter by element symbol (e.g., 'Fe', 'Cu').
-        edge : str, optional
-            Filter by edge type (e.g., 'K-edge', 'L3-edge').
-        limit : int, optional
-            Maximum number of spectra to return.
-
-        Returns
-        -------
-        list of dict
-            Each dict has keys: id, element, edge, name, energy (list), mu (list)
-        """
-        import sqlite3
-        import json
-
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        query = """SELECT id, element, material_name, edge, energy_json, mu_json
-                   FROM spectra
-                   WHERE download_status='success' AND energy_json IS NOT NULL"""
-        params = []
-
-        if spectrum_id is not None:
-            query += " AND id = ?"
-            params.append(spectrum_id)
-        if element:
-            query += " AND element = ?"
-            params.append(element)
-        if edge:
-            query += " AND edge = ?"
-            params.append(edge)
-        if limit:
-            query += " LIMIT ?"
-            params.append(limit)
-
-        rows = c.execute(query, tuple(params)).fetchall()
-        results = []
-
-        for row in rows:
-            try:
-                energy_list = json.loads(row['energy_json'])
-                mu_list = json.loads(row['mu_json'])
-
-                if energy_list and mu_list and len(energy_list) > 5:
-                    results.append({
-                        'id': row['id'],
-                        'element': row['element'],
-                        'edge': row['edge'],
-                        'name': row['material_name'],
-                        'energy': energy_list,
-                        'mu': mu_list,
-                    })
-            except Exception:
-                pass
-
-        conn.close()
-        return results
-
     def find_edge_energy(self, energy, mu):
         """Finds the edge energy by locating the maximum of the first derivative."""
         if len(energy) < 2:
             return None
 
-        # Calculate derivative d(mu)/d(E) using simple forward difference
         derivs = []
         mid_energies = []
 
@@ -198,7 +131,6 @@ class EdgeIdentifier:
                 derivs.append(0)
                 mid_energies.append(energy[i])
 
-        # Find max derivative
         max_val = -float('inf')
         max_idx = -1
 
@@ -213,9 +145,6 @@ class EdgeIdentifier:
 
     def identify_element(self, edge_energy, tolerance=100.0):
         """Identifies the element and edge type based on the detected edge energy.
-
-        Uses purely the derivative-determined edge energy compared against
-        reference edge energies from the X-ray Data Booklet.
 
         Parameters
         ----------
@@ -233,8 +162,6 @@ class EdgeIdentifier:
             return []
 
         matches = []
-
-        # Edge preference order for tiebreaking (K is most common)
         edge_priority = {'K': 0, 'L3': 1, 'L2': 2, 'L1': 3}
 
         edge_tables = {
@@ -260,10 +187,10 @@ class EdgeIdentifier:
         return matches
 
 
-# ─── CLI helpers ─────────────────────────────────────────────────────
+# ─── CLI ─────────────────────────────────────────────────────────────
 
 def process_file(identifier, filepath):
-    """Process a single spectrum file."""
+    """Process a single two-column spectrum file."""
     energy, mu = identifier.load_spectrum(filepath)
 
     if energy is None:
@@ -281,90 +208,35 @@ def process_file(identifier, filepath):
         if not matches:
             print("  No matching element found within tolerance.")
         else:
-            top_match = matches[0]
-            print(f"  Identified: {top_match['Element']} {top_match['Edge']}-edge (Diff: {top_match['Diff']:.2f} eV)")
+            top = matches[0]
+            print(f"  Identified: {top['Element']} {top['Edge']}-edge (Diff: {top['Diff']:.2f} eV)")
+            if len(matches) > 1:
+                print(f"  Runner-up:  {matches[1]['Element']} {matches[1]['Edge']}-edge (Diff: {matches[1]['Diff']:.2f} eV)")
     else:
         print("  Could not determine edge energy.")
 
 
-def process_db(identifier, db_path, element=None, edge=None, limit=None):
-    """Process spectra from the xas_spectra.db database."""
-    spectra = identifier.load_spectrum_from_db(db_path, element=element, edge=edge, limit=limit)
-
-    if not spectra:
-        print("No spectra found matching criteria.")
-        return
-
-    print(f"Loaded {len(spectra)} spectra from database")
-    print("=" * 80)
-
-    for spec in spectra:
-        energy = spec['energy']
-        mu = spec['mu']
-
-        edge_energy = identifier.find_edge_energy(energy, mu)
-
-        label = f"[ID {spec['id']}] {spec['element']} - {spec['name']}"
-
-        if edge_energy:
-            matches = identifier.identify_element(edge_energy)
-            if matches:
-                top = matches[0]
-                print(f"  {label}")
-                print(f"    Detected: {edge_energy:.2f} eV -> {top['Element']} {top['Edge']}-edge (Diff: {top['Diff']:.2f} eV)")
-            else:
-                print(f"  {label}")
-                print(f"    Detected: {edge_energy:.2f} eV -> No match")
-        else:
-            print(f"  {label}")
-            print(f"    Could not determine edge energy")
-
-
 def main():
     if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python identify_edge.py <path_to_spectrum_file_or_directory>")
-        print("  python identify_edge.py --db <path_to_db> [--element Fe] [--edge K-edge] [--limit 10]")
+        print("Usage: python identify_edge.py <spectrum_file_or_directory>")
+        print()
+        print("Input: two-column text file (Energy in eV, Mu)")
+        print("  Lines starting with '#' are ignored.")
         sys.exit(1)
 
     identifier = EdgeIdentifier()
+    path = sys.argv[1]
 
-    if sys.argv[1] == '--db':
-        # Database mode
-        db_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(parent_dir, 'xas_spectra.db')
-
-        element = None
-        edge = None
-        limit = 10
-
-        i = 3
-        while i < len(sys.argv):
-            if sys.argv[i] == '--element' and i + 1 < len(sys.argv):
-                element = sys.argv[i + 1]
-                i += 2
-            elif sys.argv[i] == '--edge' and i + 1 < len(sys.argv):
-                edge = sys.argv[i + 1]
-                i += 2
-            elif sys.argv[i] == '--limit' and i + 1 < len(sys.argv):
-                limit = int(sys.argv[i + 1])
-                i += 2
-            else:
-                i += 1
-
-        process_db(identifier, db_path, element=element, edge=edge, limit=limit)
+    if os.path.isdir(path):
+        print(f"Scanning directory: {path}")
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if file.startswith('.'):
+                    continue
+                if file.lower().endswith(('.dat', '.xdi', '.txt', '.data', '.csv')):
+                    process_file(identifier, os.path.join(root, file))
     else:
-        # File/directory mode
-        path = sys.argv[1]
-
-        if os.path.isdir(path):
-            print(f"Scanning directory: {path}")
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    if file.startswith('.'): continue
-                    if file.lower().endswith(('.dat', '.xdi', '.txt', '.001', '.002')):
-                        process_file(identifier, os.path.join(root, file))
-        else:
-            process_file(identifier, path)
+        process_file(identifier, path)
 
 
 if __name__ == "__main__":
